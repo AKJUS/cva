@@ -1,15 +1,16 @@
 ---
 title: Variants
+description: Create variants, compound variants, and disable variants with cva@beta.
 ---
 
 import Carbon from "../../../../components/carbon.astro";
 
 <Carbon />
 
-## Creating Variants
+## Creating variants
 
 :::note
-Although `cva` is a [**tiny**](https://bundlephobia.com/package/cva) library, it's best to use in a SSR/SSG environment – your user probably doesn't need this JavaScript, especially for static components.
+Although `cva` is a [**tiny**](https://bundlephobia.com/package/cva) library, it's best to use in an environment with server-side rendering (SSR) or static-site generation (SSG): your user probably doesn't need this JavaScript, especially for static components.
 :::
 
 To kick things off, let's build a "basic" `button` component, using `cva` to handle our variant's classes
@@ -59,13 +60,13 @@ const button = cva({
 });
 
 button();
-// => "font-semibold border rounded bg-blue-500 text-white border-transparent hover:bg-blue-600 text-base py-2 px-4 uppercase"
+// => "rounded border font-semibold border-transparent bg-blue-500 text-white hover:bg-blue-600 px-4 py-2 text-base uppercase"
 
 button({ intent: "secondary", size: "small" });
-// => "font-semibold border rounded bg-white text-gray-800 border-gray-400 hover:bg-gray-100 text-sm py-1 px-2"
+// => "rounded border font-semibold border-gray-400 bg-white text-gray-800 hover:bg-gray-100 px-2 py-1 text-sm"
 ```
 
-## Compound Variants
+## Compound variants
 
 Variants that apply when multiple other variant conditions are met.
 
@@ -91,7 +92,7 @@ const button = cva({
 });
 ```
 
-### Targeting Multiple Variant Conditions
+### Targeting multiple variant conditions
 
 ```ts
 // components/button.ts
@@ -117,9 +118,9 @@ const button = cva({
 });
 ```
 
-## Disabling Variants
+## Disabling variants
 
-Want to disable a variant completely? Provide an option with a value of `null`.
+To disable a variant completely, provide an option with a value of `null`.
 
 If you're stuck on naming, we recommend setting an explicit `"unset"` option ([similar to the CSS keyword](https://developer.mozilla.org/en-US/docs/Web/CSS/unset)).
 

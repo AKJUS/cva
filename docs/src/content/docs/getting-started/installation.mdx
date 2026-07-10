@@ -1,5 +1,6 @@
 ---
 title: Installation
+description: Install class-variance-authority and configure Tailwind CSS IntelliSense and style-conflict handling.
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
@@ -47,9 +48,9 @@ import Carbon from "../../../components/carbon.astro";
 
 <details>
 
-<summary>Do I really have to write such a long package name?</summary>
+<summary>Do I have to write such a long package name?</summary>
 
-Unfortunately, for a little bit longer, yes. Originally, the plan was to publish the package as `cva`, but this name [was taken and marked as a "placeholder"](https://www.npmjs.com/package/cva).
+Unfortunately, for a little bit longer, yes. Originally, the plan was to publish the package as `cva`, but someone had already registered that name on npm and [marked it as a "placeholder"](https://www.npmjs.com/package/cva).
 
 On 2022/02/16, GitHub transferred NPM ownership of `cva` to [Joe Bell](https://joebell.studio). This shorter name will be used from v1 onwards.
 
@@ -144,7 +145,7 @@ You can enable autocompletion inside `cva` using the steps below:
   </TabItem>
 </Tabs>
 
-### Handling Style Conflicts
+### Handling style conflicts
 
 Although `cva`'s API is designed to help you avoid styling conflicts, there's still a small margin of error.
 

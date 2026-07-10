@@ -1,5 +1,6 @@
 ---
 title: Installation
+description: Install cva@beta and configure Tailwind CSS IntelliSense and tailwind-merge.
 ---
 
 import Carbon from "../../../../components/carbon.astro";
@@ -125,7 +126,7 @@ You can enable autocompletion inside `cva` using the steps below:
   </TabItem>
 </Tabs>
 
-### Handling Style Conflicts
+### Handling style conflicts
 
 If you want to merge Tailwind CSS classes without conflicts, you may wish to [roll-your-own `cva`](../api-reference#defineconfig) with the [`tailwind-merge`](https://github.com/dcastil/tailwind-merge) package:
 
@@ -138,7 +139,7 @@ If you want to merge Tailwind CSS classes without conflicts, you may wish to [ro
 import { defineConfig } from "cva";
 import { twMerge } from "tailwind-merge";
 
-export const { cva, cx, compose } = defineConfig({
+export const { cva, cx } = defineConfig({
   hooks: {
     onComplete: (className) => twMerge(className),
   },
@@ -165,7 +166,7 @@ export const button = cva({
 });
 
 button();
-// => "font-semibold border rounded bg-blue-500 text-white border-transparent hover:bg-blue-600 text-base py-2 px-4 uppercase"
+// => "font-semibold border rounded bg-blue-500 text-white border-transparent hover:bg-blue-600"
 
 cx("bg-gray-200", "bg-blue-500");
 // => "bg-blue-500"

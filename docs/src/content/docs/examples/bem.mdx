@@ -1,10 +1,13 @@
 ---
 title: BEM
+description: Use cva to apply BEM class names instead of utility classes.
 ---
 
 import Carbon from "../../../components/carbon.astro";
 
 <Carbon />
+
+This example applies BEM class names with `cva` instead of utility classes.
 
 ```css
 /* styles.css */
@@ -55,7 +58,7 @@ const button = cva("button", {
 });
 
 button();
-// => "button button--primary button--medium"
+// => "button button--primary button--medium button--primary-small"
 
 button({ intent: "secondary", size: "small" });
 // => "button button--secondary button--small"

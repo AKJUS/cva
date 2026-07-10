@@ -1,12 +1,13 @@
 ---
 title: Polymorphism
+description: Apply cva classes to any HTML element, or roll your own render prop with Base UI's useRender.
 ---
 
 import Carbon from "../../../../components/carbon.astro";
 
 <Carbon />
 
-`cva` components are polymorphic (and framework-agnostic) by default; just apply the class to your preferred HTML element…
+`cva` components are polymorphic (and framework-agnostic) by default: apply the class to your preferred HTML element…
 
 ```tsx
 import { button } from "./components/button";
@@ -18,7 +19,7 @@ export default () => (
 );
 ```
 
-## Alternative Approaches
+## Alternative approaches
 
 ### React
 
@@ -74,8 +75,8 @@ export function Button({
 import { Button } from "./components/button";
 
 // Renders:
-//   <a href="/sign-up" class="button bg-blue-500 text-white border-transparent hover:bg-blue-600">
-//     Sign up
+//   <a href="/contact" class="button bg-blue-500 hover:bg-blue-600 border-transparent text-white">
+//     Contact
 //   </a>
 export default () => <Button render={<a href="/contact" />}>Contact</Button>;
 ```
