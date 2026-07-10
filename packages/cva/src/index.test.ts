@@ -1,5 +1,5 @@
 import type * as CVA from "./";
-import { compose, cva, cx, defineConfig } from "./";
+import { compose, cva, cx, defineConfig, getSchema } from "./";
 
 describe("cx", () => {
   describe.each<CVA.CXOptions>([
@@ -74,6 +74,93 @@ describe("compose", () => {
     const card = compose(box, stack);
 
     expectTypeOf(card).toBeFunction();
+
+    expectTypeOf(card).parameter(0).toMatchTypeOf<
+      | {
+          shadow?: "sm" | "md" | undefined;
+          gap?: "unset" | 1 | 2 | 3 | undefined;
+        }
+      | undefined
+    >();
+
+    expect(card()).toBe("shadow-sm");
+    expect(card({ class: "adhoc-class" })).toBe("shadow-sm adhoc-class");
+    expect(card({ className: "adhoc-class" })).toBe("shadow-sm adhoc-class");
+    expect(card({ shadow: "md" })).toBe("shadow-md");
+    expect(card({ gap: 2 })).toBe("shadow-sm gap-2");
+    expect(card({ shadow: "md", gap: 3, class: "adhoc-class" })).toBe(
+      "shadow-md gap-3 adhoc-class",
+    );
+    expect(
+      card({
+        shadow: "md",
+        gap: 3,
+        className: "adhoc-class",
+      }),
+    ).toBe("shadow-md gap-3 adhoc-class");
+  });
+});
+
+describe("cva — composes", () => {
+  test("should support a single component", () => {
+    const box = cva({
+      variants: {
+        shadow: {
+          sm: "shadow-sm",
+          md: "shadow-md",
+        },
+      },
+      defaultVariants: {
+        shadow: "sm",
+      },
+    });
+
+    const card = cva({ composes: box });
+
+    expectTypeOf(card).toBeFunction();
+    expectTypeOf(card).parameter(0).toMatchTypeOf<
+      | {
+          shadow?: "sm" | "md" | undefined;
+        }
+      | undefined
+    >();
+
+    expect(card()).toBe("shadow-sm");
+    expect(card({ class: "adhoc-class" })).toBe("shadow-sm adhoc-class");
+    expect(card({ className: "adhoc-class" })).toBe("shadow-sm adhoc-class");
+    expect(card({ shadow: "md" })).toBe("shadow-md");
+  });
+
+  test("should merge into a single component", () => {
+    const box = cva({
+      variants: {
+        shadow: {
+          sm: "shadow-sm",
+          md: "shadow-md",
+        },
+      },
+      defaultVariants: {
+        shadow: "sm",
+      },
+    });
+
+    const stack = cva({
+      variants: {
+        gap: {
+          unset: null,
+          1: "gap-1",
+          2: "gap-2",
+          3: "gap-3",
+        },
+      },
+      defaultVariants: {
+        gap: "unset",
+      },
+    });
+
+    const card = cva({ composes: [box, stack] });
+
+    expectTypeOf(card).toBeFunction();
     expectTypeOf(card).parameter(0).toMatchTypeOf<
       | {
           shadow?: "sm" | "md" | undefined;
@@ -93,6 +180,482 @@ describe("compose", () => {
     expect(card({ shadow: "md", gap: 3, className: "adhoc-class" })).toBe(
       "shadow-md gap-3 adhoc-class",
     );
+  });
+
+  test("should support additional variants alongside composes", () => {
+    const box = cva({
+      variants: {
+        shadow: {
+          sm: "shadow-sm",
+          md: "shadow-md",
+        },
+      },
+      defaultVariants: {
+        shadow: "sm",
+      },
+    });
+
+    const stack = cva({
+      variants: {
+        gap: {
+          unset: null,
+          1: "gap-1",
+          2: "gap-2",
+          3: "gap-3",
+        },
+      },
+      defaultVariants: {
+        gap: "unset",
+      },
+    });
+
+    const card = cva({
+      composes: [box, stack],
+      variants: {
+        rounded: { sm: "rounded-sm", lg: "rounded-lg" },
+      },
+      defaultVariants: { rounded: "sm" },
+    });
+
+    expectTypeOf(card).parameter(0).toMatchTypeOf<
+      | {
+          shadow?: "sm" | "md" | undefined;
+          gap?: "unset" | 1 | 2 | 3 | undefined;
+          rounded?: "sm" | "lg" | undefined;
+        }
+      | undefined
+    >();
+
+    expect(card()).toBe("shadow-sm rounded-sm");
+    expect(card({ rounded: "lg" })).toBe("shadow-sm rounded-lg");
+    expect(card({ shadow: "md", gap: 2, rounded: "lg" })).toBe(
+      "shadow-md gap-2 rounded-lg",
+    );
+  });
+
+  // https://github.com/joe-bell/cva/issues/256
+  //
+  // `composes: [a, b, c]` used to infer `(a | c)[]` rather than a tuple: `b`
+  // was silently dropped by TS's union-subtype reduction whenever its
+  // variants were a structural superset of `a`'s (exactly this shape), so
+  // `"secondary"` disappeared from both the props type and `getSchema`.
+  test("should union overlapping variant values across composed components (#256)", () => {
+    const a = cva({
+      base: "a",
+      variants: { style: { primary: "a-primary" } },
+    });
+    const b = cva({
+      base: "b",
+      variants: { style: { primary: "b-primary", secondary: "b-secondary" } },
+    });
+    const c = cva({
+      base: "c",
+      variants: { style: { tertiary: "c-tertiary" } },
+    });
+
+    const combined = cva({ composes: [a, b, c] });
+
+    expectTypeOf<CVA.VariantProps<typeof combined>>().toEqualTypeOf<{
+      style?: "primary" | "secondary" | "tertiary" | undefined;
+    }>();
+
+    // Each composed component still resolves its own class independently —
+    // overlapping values extend, they never override one another.
+    expect(combined({ style: "primary" })).toBe("a a-primary b b-primary c");
+    expect(combined({ style: "secondary" })).toBe("a b b-secondary c");
+    expect(combined({ style: "tertiary" })).toBe("a b c c-tertiary");
+
+    const schema = getSchema(combined);
+    expect(schema).toStrictEqual({
+      style: { values: ["primary", "secondary", "tertiary"] },
+    });
+    expectTypeOf(schema).toEqualTypeOf<{
+      style: { values: readonly ("primary" | "secondary" | "tertiary")[] };
+    }>();
+
+    // @ts-expect-error — no composed component declares `style: "quaternary"`
+    combined({ style: "quaternary" });
+  });
+
+  test("should propagate merged (last-wins) defaults to every composed component", () => {
+    const a = cva({ base: "a", variants: { style: { primary: "a-primary" } } });
+    const b = cva({
+      base: "b",
+      variants: { style: { primary: "b-primary", secondary: "b-secondary" } },
+      defaultVariants: { style: "primary" },
+    });
+    const c = cva({
+      base: "c",
+      variants: { style: { tertiary: "c-tertiary" } },
+      defaultVariants: { style: "tertiary" },
+    });
+
+    const combined = cva({ composes: [a, b, c] });
+
+    // With no props, the merged default (`"tertiary"`, from the last
+    // composed component) is propagated to every composed component — not
+    // just `c` — so the runtime output matches `getSchema`'s `defaultValue`.
+    expect(combined()).toBe("a b c c-tertiary");
+    expect(combined({ style: "tertiary" })).toBe("a b c c-tertiary");
+
+    // Explicit props still take precedence over the merged default.
+    expect(combined({ style: "primary" })).toBe("a a-primary b b-primary c");
+
+    expect(getSchema(combined)).toStrictEqual({
+      style: {
+        values: ["primary", "secondary", "tertiary"],
+        defaultValue: "tertiary",
+      },
+    });
+  });
+
+  test("should extend, not replace, a composed variant redeclared locally", () => {
+    const box = cva({
+      variants: {
+        shadow: {
+          sm: "shadow-sm",
+          md: "shadow-md",
+        },
+      },
+      defaultVariants: {
+        shadow: "sm",
+      },
+    });
+
+    const card = cva({
+      composes: box,
+      variants: {
+        shadow: { lg: "shadow-lg" },
+      },
+    });
+
+    expect(card()).toBe("shadow-sm");
+    expect(card({ shadow: "sm" })).toBe("shadow-sm");
+    expect(card({ shadow: "lg" })).toBe("shadow-lg");
+
+    expect(getSchema(card)).toStrictEqual({
+      shadow: { values: ["sm", "md", "lg"], defaultValue: "sm" },
+    });
+  });
+
+  test("should apply a locally-redeclared variant at the composed default", () => {
+    const box = cva({
+      variants: { shadow: { sm: "shadow-sm", md: "shadow-md" } },
+      defaultVariants: { shadow: "sm" },
+    });
+
+    // `card` redeclares `shadow: "sm"` locally. The effective default ("sm",
+    // from `box`) must resolve the local class too — so the no-props render
+    // matches explicitly selecting that default, and both match `getSchema`.
+    const card = cva({
+      composes: box,
+      variants: { shadow: { sm: "local-sm" } },
+    });
+
+    expect(card()).toBe("shadow-sm local-sm");
+    expect(card()).toBe(card({ shadow: "sm" }));
+    expect(getSchema(card).shadow.defaultValue).toBe("sm");
+  });
+
+  test("should keep the schema type when a local default overrides a composed one", () => {
+    const b = cva({
+      variants: { style: { primary: "b-primary", secondary: "b-secondary" } },
+      defaultVariants: { style: "primary" },
+    });
+    const combined = cva({
+      composes: b,
+      variants: { style: { secondary: "c-secondary" } },
+      defaultVariants: { style: "secondary" },
+    });
+
+    const schema = getSchema(combined);
+
+    expect(schema).toStrictEqual({
+      style: { values: ["primary", "secondary"], defaultValue: "secondary" },
+    });
+    // A plain intersection would collapse `"primary" & "secondary"` to `never`
+    // and silently drop `style` from this type.
+    expectTypeOf(schema).toEqualTypeOf<{
+      style: {
+        values: readonly ("primary" | "secondary")[];
+        defaultValue: "secondary";
+      };
+    }>();
+  });
+
+  test("should support nested composition", () => {
+    const box = cva({
+      base: "box",
+      variants: { shadow: { sm: "shadow-sm", md: "shadow-md" } },
+      defaultVariants: { shadow: "sm" },
+    });
+    const inner = cva({ base: "inner", composes: box });
+    const outer = cva({ base: "outer", composes: inner });
+
+    expect(outer()).toBe("box shadow-sm inner outer");
+    expect(outer({ shadow: "md" })).toBe("box shadow-md inner outer");
+    expect(getSchema(outer)).toStrictEqual({
+      shadow: { values: ["sm", "md"], defaultValue: "sm" },
+    });
+  });
+
+  test("should support a readonly/as-const array of composed components", () => {
+    const box = cva({
+      variants: { shadow: { sm: "shadow-sm" } },
+      defaultVariants: { shadow: "sm" },
+    });
+    const stack = cva({
+      variants: { gap: { 1: "gap-1" } },
+      defaultVariants: { gap: 1 },
+    });
+
+    const card = cva({ composes: [box, stack] as const });
+
+    expect(card()).toBe("shadow-sm gap-1");
+    expect(getSchema(card)).toStrictEqual({
+      shadow: { values: ["sm"], defaultValue: "sm" },
+      gap: { values: [1], defaultValue: 1 },
+    });
+  });
+
+  test("should support composing a component without variants", () => {
+    const plain = cva({ base: "plain" });
+    const styled = cva({
+      base: "styled",
+      variants: { shadow: { sm: "shadow-sm" } },
+    });
+
+    const card = cva({ composes: [plain, styled] });
+
+    expect(card()).toBe("plain styled");
+    expect(card({ shadow: "sm" })).toBe("plain styled shadow-sm");
+    expect(getSchema(card)).toStrictEqual({
+      shadow: { values: ["sm"] },
+    });
+  });
+
+  test("should reject values that aren't cva() components", () => {
+    const box = cva({ variants: { shadow: { sm: "shadow-sm" } } });
+    const stack = cva({ variants: { gap: { 1: "gap-1" } } });
+
+    // @ts-expect-error — plain function: no `config` property
+    cva({ composes: () => "" });
+    // @ts-expect-error — plain function inside an array
+    cva({ composes: [box, () => ""] });
+
+    const composed = compose(box, stack);
+    // @ts-expect-error — `compose()` results carry no `config` and can't be
+    // re-composed; compose the original components via `composes` instead
+    cva({ composes: composed });
+  });
+});
+
+describe("getSchema", () => {
+  test("should return the schema for a component", () => {
+    const buttonWithoutBaseWithDefaultsString = cva({
+      base: "button font-semibold border rounded",
+      variants: {
+        intent: {
+          unset: null,
+          primary:
+            "button--primary bg-blue-500 text-white border-transparent hover:bg-blue-600",
+          secondary:
+            "button--secondary bg-white text-gray-800 border-gray-400 hover:bg-gray-100",
+          warning:
+            "button--warning bg-yellow-500 border-transparent hover:bg-yellow-600",
+          danger: [
+            "button--danger",
+            [
+              1 && "bg-red-500",
+              { baz: false, bat: null },
+              ["text-white", ["border-transparent"]],
+            ],
+            "hover:bg-red-600",
+          ],
+        },
+        empty: {},
+        disabled: {
+          true: "button--disabled opacity-050 cursor-not-allowed",
+          false: "button--enabled cursor-pointer",
+        },
+        size: {
+          small: "button--small text-sm py-1 px-2",
+          medium: "button--medium text-base py-2 px-4",
+          large: "button--large text-lg py-2.5 px-4",
+        },
+        m: {
+          0: "m-0",
+          1: "m-1",
+        },
+      },
+      compoundVariants: [
+        {
+          intent: "primary",
+          size: "medium",
+          class: "button--primary-medium uppercase",
+        },
+        {
+          intent: "warning",
+          disabled: false,
+          class: "button--warning-enabled text-gray-800",
+        },
+        {
+          intent: "warning",
+          disabled: true,
+          class: [
+            "button--warning-disabled",
+            [1 && "text-black", { baz: false, bat: null }],
+          ],
+        },
+        {
+          intent: ["warning", "danger"],
+          class: "button--warning-danger !border-red-500",
+        },
+        {
+          intent: ["warning", "danger"],
+          size: "medium",
+          class: "button--warning-danger-medium",
+        },
+      ],
+      defaultVariants: {
+        disabled: false,
+        intent: "primary",
+        size: "medium",
+      },
+    });
+
+    const schema = getSchema(buttonWithoutBaseWithDefaultsString);
+
+    expect(schema).toStrictEqual({
+      disabled: {
+        values: [true, false],
+        defaultValue: false,
+      },
+      intent: {
+        values: ["unset", "primary", "secondary", "warning", "danger"],
+        defaultValue: "primary",
+      },
+      m: {
+        values: [0, 1],
+      },
+      size: {
+        values: ["small", "medium", "large"],
+        defaultValue: "medium",
+      },
+    });
+
+    expectTypeOf(schema).toEqualTypeOf<{
+      intent: {
+        values: readonly (
+          | "warning"
+          | "unset"
+          | "primary"
+          | "secondary"
+          | "danger"
+        )[];
+        defaultValue: "primary";
+      };
+      disabled: {
+        values: readonly boolean[];
+        defaultValue: false;
+      };
+      size: {
+        values: readonly ("small" | "medium" | "large")[];
+        defaultValue: "medium";
+      };
+      m: {
+        values: readonly (0 | 1)[];
+      };
+    }>();
+  });
+
+  test("should return the schema for a composed component", () => {
+    const box = cva({
+      variants: {
+        shadow: {
+          sm: "shadow-sm",
+          md: "shadow-md",
+        },
+      },
+      defaultVariants: {
+        shadow: "sm",
+      },
+    });
+
+    const stack = cva({
+      variants: {
+        gap: {
+          unset: null,
+          1: "gap-1",
+          2: "gap-2",
+          3: "gap-3",
+        },
+      },
+      defaultVariants: {
+        gap: "unset",
+      },
+    });
+
+    const single = cva({ composes: box });
+    expect(getSchema(single)).toStrictEqual({
+      shadow: { values: ["sm", "md"], defaultValue: "sm" },
+    });
+
+    const card = cva({ composes: [box, stack] });
+    const schema = getSchema(card);
+
+    expect(schema).toStrictEqual({
+      shadow: { values: ["sm", "md"], defaultValue: "sm" },
+      gap: { values: [1, 2, 3, "unset"], defaultValue: "unset" },
+    });
+
+    expectTypeOf(schema).toEqualTypeOf<{
+      shadow: { values: readonly ("sm" | "md")[]; defaultValue: "sm" };
+      gap: { values: readonly ("unset" | 1 | 2 | 3)[]; defaultValue: "unset" };
+    }>();
+  });
+
+  test("should reject components not created by cva()", () => {
+    const box = cva({
+      variants: { shadow: { sm: "shadow-sm" } },
+    });
+    const stack = cva({
+      variants: { gap: { 1: "gap-1" } },
+    });
+    const composed = compose(box, stack);
+    const plainFunction = () => "";
+
+    // @ts-expect-error — `compose()`'s result has no `.config`, so it can't
+    // be introspected by `getSchema`. Use the `composes` property instead.
+    getSchema(composed);
+    // @ts-expect-error — not a cva()-created component at all
+    getSchema(plainFunction);
+  });
+
+  test("should normalize numeric variant keys, including negatives", () => {
+    const component = cva({
+      variants: {
+        offset: {
+          [-1]: "-mt-1",
+          0: "mt-0",
+          1: "mt-1",
+        },
+      },
+      defaultVariants: { offset: -1 },
+    });
+
+    const schema = getSchema(component);
+
+    // Runtime values match the variant prop types (`-1 | 0 | 1`), not the
+    // stringified object keys they were read from. Order follows `Object.keys`:
+    // array-index keys (`0`, `1`) ascending first, then other keys (`-1`) by
+    // insertion order.
+    expect(schema).toStrictEqual({
+      offset: { values: [0, 1, -1], defaultValue: -1 },
+    });
+    expectTypeOf(schema).toEqualTypeOf<{
+      offset: { values: readonly (0 | 1 | -1)[]; defaultValue: -1 };
+    }>();
   });
 });
 

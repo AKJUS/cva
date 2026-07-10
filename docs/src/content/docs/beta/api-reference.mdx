@@ -23,6 +23,7 @@ const component = cva(options);
    - `variants`: your variants schema
    - `compoundVariants`: variants based on a combination of previously defined variants
    - `defaultVariants`: set default values for previously defined variants.
+   - `composes`: shallow merge one or more other `cva` components into this one, as a single component or an array. See [Composing Components](/beta/getting-started/composing-components).
 
 ### Returns
 
@@ -46,23 +47,50 @@ const className = cx(classes);
 
 `string`
 
-## `compose`
+## `getSchema`
 
-Shallow merges any number of `cva` components into a single component.
+Extracts a plain-object schema (variant names, possible values, and default values) from a `cva` component. Use it to generate Storybook controls, documentation, or any other UI that reads a component's variants without re-declaring them. See [Utilities](/beta/getting-started/utilities) for use cases.
 
 ```ts
-import { compose } from "cva";
+import { cva, getSchema } from "cva";
 
-const composedComponent = compose(options);
+const button = cva({
+  base: "button",
+  variants: {
+    intent: {
+      primary: "button--primary",
+      secondary: "button--secondary",
+    },
+    disabled: {
+      true: "button--disabled",
+      false: "button--enabled",
+    },
+  },
+  defaultVariants: {
+    intent: "primary",
+    disabled: false,
+  },
+});
+
+getSchema(button);
+// => {
+//   intent: { values: ["primary", "secondary"], defaultValue: "primary" },
+//   disabled: { values: [true, false], defaultValue: false },
+// }
 ```
+
+`getSchema` omits a variant that has no values (e.g. `variants: { empty: {} }`).
 
 ### Parameters
 
-`options`: array of `cva` components
+`component`: a component created by `cva` (including components composed via [`composes`](#cva))
 
 ### Returns
 
-A `cva` component function
+An object keyed by variant name. Each entry has:
+
+- `values`: a readonly array of the variant's possible values
+- `defaultValue`: present only if the variant has a `defaultVariants` entry
 
 ## `defineConfig`
 
