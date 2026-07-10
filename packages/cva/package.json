@@ -39,7 +39,6 @@
     "check": "pnpm run '/^check:.*/'",
     "check:exports": "attw --pack .",
     "check:tsc": "tsc --project tsconfig.json --noEmit",
-    "dev": "jest --config .config/jest.config.ts --watch",
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {

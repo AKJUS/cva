@@ -2310,6 +2310,41 @@ describe("cva", () => {
   });
 });
 
+describe("CVAVariantShape", () => {
+  test("types a standalone variants config passed to cva", () => {
+    const variants = {
+      intent: {
+        primary: "button--primary",
+        secondary: "button--secondary",
+      },
+    } satisfies CVA.CVAVariantShape;
+
+    const button = cva({ variants });
+
+    expectTypeOf<CVA.VariantProps<typeof button>>().toEqualTypeOf<{
+      intent?: "primary" | "secondary" | undefined;
+    }>();
+
+    expect(button({ intent: "primary" })).toBe("button--primary");
+
+    // @ts-expect-error — value isn't a `ClassValue` map
+    ({ intent: "primary" }) satisfies CVA.CVAVariantShape;
+  });
+});
+
+describe("exported types", () => {
+  test("portability types stay exported", () => {
+    // Each name below must be reachable through the `CVA.` namespace
+    // import, or this fails to compile. See AGENTS.md Learnings.
+    expectTypeOf<CVA.CVAComponentShape>().toEqualTypeOf<
+      CVA.CVAComponent<any, any>
+    >();
+    expectTypeOf<CVA.CVAVariantShape>().toEqualTypeOf<
+      Record<string, Record<string, CVA.ClassValue>>
+    >();
+  });
+});
+
 describe("defineConfig", () => {
   describe("hooks", () => {
     describe("onComplete", () => {
