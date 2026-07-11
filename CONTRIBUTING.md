@@ -70,8 +70,52 @@ To scope a command to a single package, use a pnpm filter, e.g. `pnpm --filter c
 
 CI runs `build`, `bundlesize`, `check`, `prettier`, `skills`, `syncpack`, and `test`, so run the matching scripts locally before opening a PR.
 
+### Build & publish (`packages/*`)
+
+Both published packages (`packages/cva` and `packages/class-variance-authority`) build with [tsdown](https://tsdown.dev). The shared options live in [`.config/tsdown.base.mts`](./.config/tsdown.base.mts) (alongside the repo's other shared tool config), and each package's `tsdown.config.mts` spreads that base and adds only its genuine deltas — entry points, sourcemaps, and output extensions. One `pnpm --filter <package> build` emits the whole dual-format output to `dist/`. The base uses tsdown's explicit extensions (`fixedExtension: true`), so `cva` ships `index.cjs` + `index.d.cts` (CommonJS) and `index.mjs` + `index.d.mts` (ESM); `class-variance-authority` overrides `fixedExtension` to keep the `index.js` + `index.d.ts` CommonJS layout it has always published, in case anything in the wild references those `dist/` paths directly.
+
+#### How the packages transform for publish
+
+The `exports` and `publishConfig.exports` blocks in each package's `package.json` are **machine-generated**: the config's `exports: { devExports: true }` makes tsdown rewrite both on every build. **Never hand-edit them** — the next build silently overwrites your change; adjust that package's `tsdown.config.mts` (or the shared base) instead. (One exception: `class-variance-authority`'s `publishConfig.typesVersions` — the node10 fallback for its `./types` subpath — is hand-maintained; tsdown doesn't generate it but preserves it across rebuilds.) The two blocks implement a dev/publish split:
+
+- The top-level `exports` points at `./src/*.ts`, so workspace consumers (tests, examples, docs) always resolve the raw TypeScript source with no build step in between.
+- `publishConfig.exports` points at `dist/`. pnpm applies `publishConfig` when packing or publishing (`pnpm pack` / `pnpm publish` — never `npm pack`, which skips the rewrite entirely), so the tarball people install resolves the built output.
+
+Two details of the published map are deliberate:
+
+- There are no explicit `types` conditions — TypeScript auto-pairs `index.mjs` → `index.d.mts` and `index.js` → `index.d.ts`, which means `import`-ing consumers get true ESM declarations rather than a shared CommonJS-flavoured `.d.ts`. The attw gate (below) verifies all four resolution modes stay green.
+- `"./package.json": "./package.json"` is exported because declaring an `exports` map encapsulates every unlisted subpath, which would break tooling that reads a dependency's `package.json` directly (bundler plugins, Metro, framework CLIs doing version detection). tsdown adds the line by default; it exposes nothing new — the file ships in every tarball regardless.
+
+#### The config, option by option
+
+[`.config/tsdown.base.mts`](./.config/tsdown.base.mts) sets the shared defaults: dual `esm`/`cjs` output, `platform: "neutral"` (keeps the packages browser/Node/edge-portable), `es2019` target, tsc-generated `dts`, the regenerated `exports` map, and the `publint`/`attw`/`unused` gates — with brief inline notes above the non-obvious ones. Each package's `tsdown.config.mts` spreads the base and overrides only genuine deltas. Note the `attw` gate needs every consuming package to declare its own `@arethetypeswrong/core` devDependency — it's an optional tsdown peer, so a missing one makes tsdown skip attw silently rather than fail.
+
+What tsdown does **not** own: `size-limit` remains the bundle-size budget (tsdown's per-file gzip size report is informational only), the `tsc --noEmit` check remains the source type check, and version bumps stay manual per [Releases](#releases).
+
+Day to day: `pnpm --filter <package> dev` runs the build in watch mode, and because the root `prepare:packages` script builds on every `pnpm install`, the publish-shape gates run then too — a broken manifest fails fast on your machine rather than in CI. If that per-install cost ever becomes a problem, `attw: 'ci-only'` in the config confines the slowest gate to CI.
+
 ## Releases
 
 A trade-off with using a personal repo is that permissions are fairly locked-down. In the mean-time releases will be made manually by the project owner.
 
 Version bumps (the `version` field in `packages/*/package.json`) are part of that manual release process — they happen only on `main`, cut by the project owner, as their own commit separate from any feature/fix work. Don't include a version bump in a feature or fix branch/PR, even if you're an agent implementing a versioned change like "cut vX.Y.Z" — leave that step to the owner on `main`.
+
+### Publishing a release (project owner)
+
+Release one package at a time, from `main`. For a package `<package>` (`cva` or `class-variance-authority`) at a new `<version>`:
+
+1. Check out `main` and make sure it's up to date: `git checkout main && git pull`.
+2. Bump the `version` field in that package's `package.json` — the only place the version changes.
+3. Commit the bump on its own, using the version as the message: `git commit -am "<package>@<version>"` (e.g. `cva@1.0.0-beta.7`).
+4. Push `main`: `git push origin main`.
+5. Tag the commit `v<version>` and push the tag:
+
+   ```sh
+   git tag v<version>          # e.g. v1.0.0-beta.7
+   git push origin v<version>
+   ```
+
+6. Publish from the package: `pnpm --filter <package> publish`. `prepublishOnly` runs the tsdown build first, so the publish-shape gates (attw, publint, unused) must pass or the publish aborts. **Publish the beta package under the `beta` dist-tag** — `pnpm --filter cva publish --tag beta` — so the prerelease doesn't overwrite `latest`; the stable package publishes to the default `latest`.
+7. Create the matching [GitHub release](https://github.com/joe-bell/cva/releases) for the `v<version>` tag.
+
+The commit message (`<package>@<version>`) and tag (`v<version>`) formats match the existing release history — keep them consistent so the two packages' releases stay legible in a shared tag namespace.
