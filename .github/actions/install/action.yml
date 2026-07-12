@@ -1,16 +1,25 @@
 name: "Setup Node.js with PNPM"
 description: "Common installation for Node.js and PNPM"
 
+inputs:
+  ref:
+    description: "Git ref to checkout (defaults to the triggering ref/SHA)"
+    required: false
+    default: ""
+
 runs:
   using: composite
   steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      with:
+        ref: ${{ inputs.ref }}
+        persist-credentials: false
 
-    - uses: pnpm/action-setup@v6
+    - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
       with:
         run_install: false
 
-    - uses: actions/setup-node@v6
+    - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
       with:
         cache: "pnpm"
         node-version-file: ".nvmrc"

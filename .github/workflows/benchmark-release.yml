@@ -1,0 +1,47 @@
+name: benchmark-release
+
+# On every published release (release or prerelease), benchmarks each
+# package at the released commit and attaches `benchmark-<package>.json` as
+# a release asset — a durable, versioned performance record to compare
+# future PRs against.
+#
+# The initial checkout below is needed to fetch `./.github/actions/install`
+# itself (a local composite action reference requires the repo to already be
+# on disk); the composite's own `ref` input then re-checks-out the same ref,
+# so a `workflow_dispatch` dry run against an older tag doesn't get silently
+# reset back to the default branch by the composite's internal checkout.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to benchmark and attach assets to (leave empty to dry-run on the default branch without uploading)"
+        required: false
+
+permissions: {}
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ inputs.tag || github.event.release.tag_name || github.ref }}
+          persist-credentials: false
+      - uses: ./.github/actions/install
+        with:
+          ref: ${{ inputs.tag || github.event.release.tag_name || github.ref }}
+
+      - name: Run benchmarks
+        run: pnpm bench
+
+      - name: Upload release assets
+        if: github.event_name == 'release' || inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        run: gh release upload "$TAG" test/bench/.output/benchmark-*.json --clobber --repo "$GITHUB_REPOSITORY"

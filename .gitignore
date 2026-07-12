@@ -1,6 +1,7 @@
 node_modules
 dist
 coverage
+test/bench/.output
 .next
 .swc
 *.tsbuildinfo

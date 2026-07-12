@@ -61,6 +61,10 @@ Run these from the repo root:
 - `pnpm build` – production build of the packages
 - `pnpm check` – type checks every package
 - `pnpm bundlesize` – verifies bundle size limits (`size-limit`)
+- `pnpm bench` – builds the packages, then runs the `vitest bench` performance scenarios against each built package (add `BENCH_BASELINES_DIR=<dir>` after running `pnpm bench:baselines --out <dir>` to also benchmark published npm baselines alongside your local changes)
+- `pnpm bench:compare` – renders a markdown comparison table from the `test/bench/.output/benchmark-*.json` files produced by `pnpm bench`
+- `pnpm bench:preview` – one command that installs the npm baselines, runs `pnpm bench` against them, and writes the rendered comparison table to `test/bench/.output/preview.md` (see Benchmarks below)
+- `pnpm bench:check` – type checks the `test/bench/` scripts
 - `pnpm prettier --check .` – checks formatting (`--write` to fix)
 - `pnpm syncpack:lint` – checks dependency-version consistency (`pnpm syncpack:fix` to fix)
 - `pnpm lint:skills` – validates the agent skills in `.agents/skills` (`skill-check`, strict mode)
@@ -68,7 +72,7 @@ Run these from the repo root:
 
 To scope a command to a single package, use a pnpm filter, e.g. `pnpm --filter cva test`.
 
-CI runs `build`, `bundlesize`, `check`, `prettier`, `skills`, `syncpack`, and `test`, so run the matching scripts locally before opening a PR.
+CI gates on `build`, `bundlesize`, `check`, `prettier`, `skills`, `syncpack`, and `test`, so run the matching scripts locally before opening a PR. CI also runs an informational `benchmark` job, which posts its results as a PR comment.
 
 ### Build & publish (`packages/*`)
 
@@ -93,6 +97,16 @@ Two details of the published map are deliberate:
 What tsdown does **not** own: `size-limit` remains the bundle-size budget (tsdown's per-file gzip size report is informational only), the `tsc --noEmit` check remains the source type check, and version bumps stay manual per [Releases](#releases).
 
 Day to day: `pnpm --filter <package> dev` runs the build in watch mode, and because the root `prepare:packages` script builds on every `pnpm install`, the publish-shape gates run then too — a broken manifest fails fast on your machine rather than in CI. If that per-install cost ever becomes a problem, `attw: 'ci-only'` in the config confines the slowest gate to CI.
+
+## Benchmarks
+
+Every PR runs a `benchmark` CI job that benchmarks each package's local build (`test/bench/scripts/*.bench.ts`, run via `vitest bench`) alongside published npm baselines for that same package (resolved per package from npm dist-tags — `beta` for `cva`, `latest` for `class-variance-authority` — then installed outside the workspace by [`test/bench/scripts/baselines.ts`](./test/bench/scripts/baselines.ts); the workspace's `pnpm-workspace.yaml` `overrides` pin `cva`/`class-variance-authority` to `workspace:*`, so baselines can't be installed inside the workspace without being silently overridden). A missing dist-tag, placeholder version, or baseline installation failure is recorded as skipped, so the local benchmark still runs.
+
+Results are posted as a sticky PR comment (updated in place on every push, including from forks) by a separate `pr-comment` workflow — see that file's header comment for why it's split out, how the untrusted artifact it reads is validated, and how to add a section of your own to the same comment from a future CI step. The job summary is written only for trusted pushes to `main`; PRs rely on the fresh-runner comment so PR code cannot inject markdown into a run summary. This is **informational only**: a regression doesn't fail CI, so treat it as a signal to investigate, not a gate. The comment renderer validates artifact shape and escapes untrusted strings, but it does not authenticate benchmark metrics — a PR author can upload fabricated ops/s numbers on their own branch, so large swings are worth reproducing locally rather than taken as proof.
+
+To reproduce that table locally before pushing, run `pnpm bench:preview`. It installs the baselines, benchmarks your build against them, and writes the rendered markdown to `test/bench/.output/preview.md` — produced by the same [`test/bench/scripts/compare.ts`](./test/bench/scripts/compare.ts) that renders the PR comment, so the preview matches what a PR would show. Offline (no npm access) it falls back to a local-only table with no baseline columns.
+
+`benchmark-release` attaches a `benchmark-<package>.json` file to every published GitHub release (`workflow_dispatch` with a `tag` input can also run it on demand). [`test/bench/scripts/report.ts`](./test/bench/scripts/report.ts) writes that schema and [`test/bench/scripts/compare.ts`](./test/bench/scripts/compare.ts) reads it — if you change the shape of one, bump `schemaVersion` and update the other in the same change.
 
 ## Releases
 

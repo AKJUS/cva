@@ -6,13 +6,52 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
-  build:
+  benchmark:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/install
+      - name: Install published baselines
+        run: pnpm bench:baselines --out "$RUNNER_TEMP/bench-baselines"
+      - name: Run benchmarks
+        env:
+          BENCH_BASELINES_DIR: ${{ runner.temp }}/bench-baselines
+        run: pnpm bench
+      # PR code has already run in this job, so do not write a summary from
+      # this runner. The separate pr-comment workflow uses a fresh runner and
+      # trusted main-branch code to post the benchmark table for every PR.
+      - name: Job summary
+        if: github.event_name == 'push'
+        run: pnpm bench:compare >> "$GITHUB_STEP_SUMMARY"
+      - name: Record PR number
+        if: github.event_name == 'pull_request'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          printf '{ "pr": %d }\n' "$PR_NUMBER" > test/bench/.output/meta.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: github.event_name == 'pull_request'
+        with:
+          name: benchmark-results
+          path: test/bench/.output/
+          include-hidden-files: true
+          retention-days: 14
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: ./.github/actions/install
       - name: Packages
         run: pnpm build
@@ -20,49 +59,62 @@ jobs:
         run: pnpm build:examples
   bundlesize:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: ./.github/actions/install
       - run: pnpm bundlesize
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: ./.github/actions/install
       - run: pnpm check
+      - run: pnpm bench:check
   prettier:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: ./.github/actions/install
       - run: pnpm prettier --check .
   skills:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: ./.github/actions/install
       - run: pnpm lint:skills
   syncpack:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: ./.github/actions/install
       - run: pnpm syncpack:lint
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: ./.github/actions/install
       - run: pnpm test
