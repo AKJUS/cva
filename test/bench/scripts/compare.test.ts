@@ -24,14 +24,26 @@ function validResult(overrides: Partial<Record<string, unknown>> = {}) {
         label: "local",
         version: "1.0.0-beta.5",
         tasks: [
-          { name: "cva: create", hz: 100, mean: 0.01, rme: 0.5, samples: 1000 },
+          {
+            name: "Create component (one-time setup)",
+            hz: 100,
+            mean: 0.01,
+            rme: 0.5,
+            samples: 1000,
+          },
         ],
       },
       {
         label: "prerelease",
         version: "1.0.0-beta.4",
         tasks: [
-          { name: "cva: create", hz: 90, mean: 0.011, rme: 0.6, samples: 900 },
+          {
+            name: "Create component (one-time setup)",
+            hz: 90,
+            mean: 0.011,
+            rme: 0.6,
+            samples: 900,
+          },
         ],
       },
       { label: "release", version: "0.7.1", skipped: "not published on npm" },
@@ -223,11 +235,61 @@ describe("renderMarkdown", () => {
     expect(markdown).toContain("not published on npm");
   });
 
-  it("includes an advisory that metrics are not authenticated", () => {
+  it("includes the contributor-facing benchmark disclaimer", () => {
     const validated = validateResult(validResult(), "cva");
     const markdown = renderMarkdown([validated]);
-    expect(markdown).toContain("validated for shape only");
-    expect(markdown).toContain("not authenticated");
+    expect(markdown).toContain("These benchmarks ran in CI on this PR's code");
+    expect(markdown).toContain("re-run the benchmarks locally");
+  });
+
+  it("uses the simplified benchmark intro copy", () => {
+    const validated = validateResult(validResult(), "cva");
+    const markdown = renderMarkdown([validated]);
+
+    expect(markdown).toContain(
+      "Comparing this PR's local benchmark run against the latest published npm versions.",
+    );
+    expect(markdown).not.toContain("dist-tags");
+    expect(markdown).toContain(
+      "Aim for higher ops/s. Treat deltas within ±5% as noise.",
+    );
+    expect(markdown).not.toContain("### How to read this");
+  });
+
+  it("renders runtime rows before static rows with display labels", () => {
+    const result = validResult();
+    const tasks = (result.implementations[0] as any).tasks;
+    tasks.push({
+      name: "Call component (default variants)",
+      hz: 100,
+      mean: 0.01,
+      rme: 0.5,
+      samples: 1000,
+    });
+    (result.implementations[1] as any).tasks.push({
+      name: "Call component (default variants)",
+      hz: 90,
+      mean: 0.011,
+      rme: 0.6,
+      samples: 900,
+    });
+
+    const markdown = renderMarkdown([validateResult(result, "cva")]);
+    expect(markdown).toContain(
+      "**`cva`** (runtime)<br />_component call with defaults_",
+    );
+    expect(markdown).toContain(
+      "**`cva`** (static)<br />_component definition_",
+    );
+    expect(markdown.indexOf("_component call with defaults_")).toBeLessThan(
+      markdown.indexOf("_component definition_"),
+    );
+  });
+
+  it("renders prerelease baselines with the beta dist-tag label", () => {
+    const validated = validateResult(validResult(), "cva");
+    const markdown = renderMarkdown([validated]);
+    expect(markdown).toContain("`1.0.0-beta.4` (`beta`)");
   });
 
   it("renders a delta between local and a baseline", () => {
@@ -259,7 +321,7 @@ describe("renderMarkdown", () => {
     const markdown = renderMarkdown([validated]);
     const row = markdown
       .split("\n")
-      .find((line) => line.includes("cva: create"));
+      .find((line) => line.includes("_component definition_"));
     expect(row).toContain("+2.0%");
     expect(row).not.toContain("🟢");
     expect(row).not.toContain("🔴");
@@ -272,7 +334,7 @@ describe("renderMarkdown", () => {
     const markdown = renderMarkdown([validated]);
     const row = markdown
       .split("\n")
-      .find((line) => line.includes("cva: create"));
+      .find((line) => line.includes("_component definition_"));
     expect(row).toBeDefined();
     expect(row).not.toMatch(/Infinity|NaN/);
   });
@@ -286,7 +348,7 @@ describe("renderMarkdown", () => {
           version: "1.0.0-beta.4",
           tasks: [
             {
-              name: "cva: create",
+              name: "Create component (one-time setup)",
               hz: 90,
               mean: 0.011,
               rme: 0.6,
@@ -300,7 +362,7 @@ describe("renderMarkdown", () => {
     const markdown = renderMarkdown([validated]);
     const row = markdown
       .split("\n")
-      .find((line) => line.includes("cva: create"));
+      .find((line) => line.includes("_component definition_"));
     expect(row).toBeDefined();
     expect(row).toContain("90 ops/s");
     expect(row).toContain("| — |");
